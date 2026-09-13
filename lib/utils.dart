@@ -123,7 +123,10 @@ class Collection<T> {
   Directory dir;
   Collection(this.dir);
 
-  Future<void> add(Map<String, dynamic> mapToJson, String filename) async {
+  // TODO: .add doesn't use `String filename`. See how Firebase assigns UUIDs
+  // Future<void> add(Map<String, dynamic> mapToJson, String filename) async {
+  Future<void> add(Map<String, dynamic> mapToJson) async {
+    String filename = "NTOIJKNASKJLDNLJKANSJDNJKASNDJDJSAHLn";
     final file = File('${dir.path}/${filename}');
     if (!file.existsSync()) {
       await file.create(recursive: true);
@@ -144,7 +147,6 @@ class Collection<T> {
 
     return out;
   }
-
   List<Mood> sortedListSync() {
     List<Mood> out = List.empty(growable: true);
     for (final file in Directory('${dir.path}').listSync()) {
@@ -154,8 +156,40 @@ class Collection<T> {
       }
     }
 
+    out.sort((a, b) {
+      return b.created_time.compareTo(a.created_time);
+    });
+
     return out;
   }
+  Document doc(String filename) {
+    var file = File("${dir.path}/$filename");
+    return Document(file);
+  }
+}
+
+class Document {
+  File file;
+  Document(this.file);
+
+  Future<void> add(Map<String, dynamic> mapToJson) async {
+    if (!file.existsSync()) {
+      await file.create(recursive: true);
+    }
+    print("Wrote to ${file.path}");
+    await file.writeAsString(jsonEncode(mapToJson));
+  }
+
+  Future<void> remove() async {
+    if (!file.existsSync()) {
+      throw PathNotFoundException(file.path, OSError('sharting my pants', 69420));
+    }
+    file.delete();
+  }
+
+  // TODO: DO THIS
+  // Future<Map<String, dynamic>> get() async {
+  // }
 }
 
 class Filesystem {
@@ -195,6 +229,10 @@ class Filesystem {
     }
 
     return Collection(directory);
+  }
+
+  static Future<void> recursiveDelete(Collection collection) async {
+    await collection.dir.delete(recursive: true);
   }
 }
 

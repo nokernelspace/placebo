@@ -43,9 +43,10 @@ class MoodPage extends StatefulWidget {
 class _MoodPageState extends State<MoodPage> {
   var moods = Filesystem.collection("moods").sortedListSync();
 
-  Mood current_mood = Mood();
+  late Mood current_mood;
 
   _MoodPageState() {
+    current_mood = moods.length == 0 ? Mood() : moods[0];
   }
 
   @override
@@ -77,25 +78,62 @@ class _MoodPageState extends State<MoodPage> {
                         itemBuilder: (BuildContext ctx, int idx) {
                           var mood = moods[idx]!;
                           var time = mood.created_time;
-                          return ListTile(
-                            title: Text(mood.people.name),
-                            subtitle: Text(formatTime(time)),
-                            trailing: Column(
-                              mainAxisAlignment: MainAxisAlignment.spaceAround,
-                              crossAxisAlignment: CrossAxisAlignment.end,
+                          return Slidable(
+                            startActionPane: ActionPane(
+                              key: const ValueKey(0),
+                              extentRatio: 0.5,
+                              motion: const ScrollMotion(),
+
                               children: [
-                                mood.notes.length == 1
-                                    ? Text(mood.notes[0])
-                                    : Text("${mood.notes.length} Notes"),
-                                Text(formatDate(time)),
+                                SlidableAction(
+                                  onPressed: (ctx) {
+                                    showCancelableMessageBox(
+                                      ctx,
+                                      "Delete?",
+                                      "Are you sure you want to delete this Entry from the local filesystem?",
+                                      onConfirm: () async {
+                                        var filename =
+                                            sanitizeFilename(
+                                              mood.created_time
+                                                  .toIso8601String(),
+                                            ) +
+                                            ".mood";
+                                        await Filesystem.collection("moods")
+                                            .doc(filename)
+                                            .remove();
+                                        setState(() {
+                                          moods = Filesystem.collection("moods").sortedListSync();
+                                        });
+                                      },
+                                    );
+                                  },
+                                  icon: Icons.delete,
+                                  backgroundColor: Colors.red,
+                                  label: "delete"
+                                ),
                               ],
                             ),
+                            child: ListTile(
+                              title: Text(mood.people.name),
+                              subtitle: Text(formatTime(time)),
+                              trailing: Column(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceAround,
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  mood.notes.length == 1
+                                      ? Text(mood.notes[0])
+                                      : Text("${mood.notes.length} Notes"),
+                                  Text(formatDate(time)),
+                                ],
+                              ),
 
-                            onTap: () {
-                              setState(() {
-                                current_mood = mood;
-                              });
-                            },
+                              onTap: () {
+                                setState(() {
+                                  current_mood = mood;
+                                });
+                              },
+                            ),
                           );
                         },
                         separatorBuilder: (ctx, idx) {
@@ -115,18 +153,29 @@ class _MoodPageState extends State<MoodPage> {
         ),
         actions: [
           IconButton(
+            icon: Icon(Icons.add),
+            onPressed: () async {
+              setState(() {
+                current_mood = Mood();
+              });
+            }
+          ), 
+
+          IconButton(
             icon: Icon(Icons.save),
             onPressed: () async {
               current_mood.last_updated_time = DateTime.now();
-              await Filesystem.collection("moods").add(
-                current_mood.toJson(),
-                // Need filename because we are not a datastore. Yet (•͡˘㇁•͡˘)
-                sanitizeFilename(current_mood.created_time.toString()) +
-                    ".mood",
-              );
+              var filename =
+                  sanitizeFilename(current_mood.created_time.toIso8601String()) +
+                  ".mood";
+
+              await Filesystem.collection("moods")
+                  .doc(filename)
+                  .add(current_mood.toJson());
               showSnackBar(context, "Saved !");
             },
           ),
+        
         ],
       ),
       body: ConstrainedBox(
@@ -156,7 +205,6 @@ class _MoodPageState extends State<MoodPage> {
                         ),
                       ],
                     ),
-
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -170,7 +218,6 @@ class _MoodPageState extends State<MoodPage> {
                         ),
                       ],
                     ),
-
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -196,6 +243,17 @@ class _MoodPageState extends State<MoodPage> {
                           }),
                         ),
                       ],
+                    ),
+                    DropdownButton<People>(
+                      value: current_mood.people,
+                      hint: const Text("People"),
+                      isExpanded: true,
+                      items: People.menuItems,
+                      onChanged: (val) {
+                        setState(() {
+                          if (val != null) current_mood.people = val;
+                        });
+                      },
                     ),
                   ],
                 ),
